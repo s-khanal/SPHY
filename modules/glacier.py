@@ -114,25 +114,26 @@ def init(self, pcr, config, pd, np, os):
         self.GlacTable["MOD_ID"]
     )  # -model id cells for which to extract temperature, precip, etc. (=cells that have glaciers)
     # -Create keys for glacier cells (index in ModelID_1d where cell has glacier)
-    self.GlacierKeys = np.ones(self.ModelID_1d.shape) * self.MV
+    self.GlacierKeys = []
     n = np.arange(self.ModelID_1d.size)
-    iCnt = 0
     for ID in SelModelID:
         if ID in self.ModelID_1d:
             key = n[self.ModelID_1d == ID]
-            self.GlacierKeys[iCnt] = key
-        iCnt += 1
-    self.GlacierKeys = self.GlacierKeys[self.GlacierKeys != self.MV]
+            self.GlacierKeys.extend(key.tolist())
     self.GlacierKeys = [
-        int(float(x)) for x in self.GlacierKeys
+        int(x) for x in self.GlacierKeys
     ]  # -make the index an integer
     # -Read the glacier parameters
     pars = ["DDFG", "DDFDG", "GlacF"]
     for i in pars:
         try:
-            setattr(self, i, pcr.readmap(self.inpath + config.get("GLACIER", i)))
+            val = pcr.readmap(self.inpath + config.get("GLACIER", i))
+            # Assume constant map, take a value
+            val_numpy = pcr.pcr2numpy(val, self.MV)
+            val = float(val_numpy.flat[0])
         except:
-            setattr(self, i, config.getfloat("GLACIER", i))
+            val = config.getfloat("GLACIER", i)
+        setattr(self, i, val)
     # -Lapse rate for temperature
     self.TLapse_table = pd.read_csv(
         self.inpath + config.get("GLACIER", "TLapse"),
@@ -342,7 +343,7 @@ def dynamic(self, pcr, pd, Temp, Precip):
     del mask
 
     # -Glacier melt
-    self.GlacTable["GlacMelt"] = 0  # -first set to 0 then update hereafter
+    self.GlacTable["GlacMelt"] = 0.0  # -first set to 0 then update hereafter
     # -Masks for full glacier melt (=no snow melt in timestep) and partial glacier melt (=where snowpack is fully melted within timestep)
     partialMelt = (self.GlacTable["OldSnowStore_GLAC"] > 0.0) & (
         self.GlacTable["SnowStore_GLAC"] == 0
